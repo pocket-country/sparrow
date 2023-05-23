@@ -61,26 +61,24 @@ class scanner {
         $this.addToken([TokenType]::SEMI); break;
       }
       # whitespace - do nothing with it
-      ' ' {
-        break;
-      }
-      "`t" {
-        break;
-      }
-      "`r" {
-        break;
-      }
+      ' '   { break; }
+      "`t"  { break; }
+      "`r"  { break; }
       # watch for different line endings in windows land
-      "`n" {
-        $this.line = $this.line + 1; break
-      }
+      "`n" { $this.line = $this.line + 1; break }
+      #sql strings start with a single quote
+      "'" { $this.string(); break; }
       # fall through, not a fixed single or multi char token
       default {
         if ( $this.isAlpha($c)) {
           $this.identifier();
-        }  #TODO add literal strings - with '' for sql
-           #TODO add numeric literals - storing as strings (that object field issue)
-           #TODO add SQL quoting for weird chars in col/table names [] and ""
+        } #TODO add numeric literals - storing as strings (that object field issue)
+          #these are processed like strings, but start with a digit or - and contain
+          # ... digits, commans, decimal pt.
+          #TODO add SQL quoting for weird chars in col/table names [] and ""
+          # ... these are processed like strings, with delimiters, but write an 
+          # ... identifier token.  Do we need to distinguish the two types of identifiers?
+          # ... like an IDENTIFIER token and a QIDENTIFIER token?
         else {
           add-content .\sparrowlogs\notscanned.log "Not Scanned: $c at line $( $this.line ), byte position $( $this.current - 1 )."
         }
@@ -88,20 +86,41 @@ class scanner {
     }
   }
 
-  # two add token signatures - one for 'fixed' tokens and one for literals
-  # in java, the simple one calls the complex one with a null,
-  # and uses a generic object to store value.  Don't know if we can do that here.
-  # start with simple call, just type.  Don't need lexemes
+  # want two add token signatures - one for 'fixed' tokens and one for literals
+  # in java, the simple one calls the complex one with a null, and uses a generic object to store value.  
+  #Don't know if we can do that here, nor do I know how nulls work so repeat some code.
   [void] addToken([TokenType] $type) {
-    $token = [token]::new($type,"--", "--", $this.start - 1);
+    $text = $this.source.substring($this.start, $this.current);
+    $token = [token]::new($type, $text, "--", $this.start - 1);
     $this.tokens.add($token);
-    add-content .\sparrowlogs\tokens.log "adding $type found at line $($this.line) byte position $($this.start - 1 )"
   }
+  [void] addToken([TokenType] $type, [string] $literal) {
+    $text = $this.source.substring($this.start, $this.current);
+    $token = [token]::new($type, $text, $literal, $this.start - 1);
+    $this.tokens.add($token)
+  }
+  #process identifiers
   [void] identifier() {
     while ($this.isAlphaNumeric($this.peek())) {$this.advance();}
-    #TODO need to mod token to have a lexeme - this will be the identifers name
+    #lexeme stored in token is identifier name.
     #TODO for keywords add dictionary
     $this.addToken([TokenType]::IDENTIFIER);
+  }
+  #process string literals.  This allows any character inc. newline in string which may not be valid SQL
+  #note also not handling any excaping or string interpolation
+  [void] string() {
+    while ($this.peek() -ne "'" -and $this.isAtEnd()) {
+      if($this.peek() -eq "`n") {$this.line = $this.line + 1;}
+      $this.advance();
+    }
+    if ($this.isAtEnd()) { #need to figure out error handling
+      Write-Host Unterminated string;  #and halt!
+    }
+    #move past closing quote
+    $this.advance();
+    #trim the quotes and add a token with the string value
+    [string] $value = $this.source.Substring($this.start+1, $this.current -1)
+    $token.addToken([TokenType::String])
   }
   # all the little helpers - first test functions, then character handling (advance, match peek);
   [bool] isAtEnd() {
