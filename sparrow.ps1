@@ -9,9 +9,8 @@ Using module ./Token.psm1
 # input script name defaluts to test.sql
 param ($script_name='./test.sql');
 
-# set up a couple of log files for testing.  Better IO later
+# set log file to dump stuff we can't process.  Better error handling later.
 $null = new-item .\sparrowlogs\notscanned.log -force ;
-$null = new-item .\sparrowlogs\tokens.log -force;
 
 class scanner {
   [String] $source;
@@ -29,7 +28,7 @@ class scanner {
     $this.line = 1;
   }
 
-  #scanTokens method loops over source
+  #scanTokens method loops over source & adds EOF at end.
   [void] scanTokens() {
     While (-not $this.isAtEnd()) {
       $this.start = $this.current;
@@ -42,23 +41,76 @@ class scanner {
   [void] scanToken() {
     $c = $this.advance();
     switch ($c) {
-      ',' {
-        $this.addToken([TokenType]::COMMA); break;
+      # single character tokens mostly operators & punctuation
+      ',' {$this.addToken([TokenType]::COMMA); break;}
+      '.' {$this.addToken([TokenType]::DOT); break;}
+      '*' {$this.addToken([TokenType]::STAR); break;}
+      '+' {$this.addToken([TokenType]::PLUS); break;}
+      '(' {$this.addToken([TokenType]::LPAREN); break;}
+      ')' {$this.addToken([TokenType]::RPAREN); break;}
+      ';' {$this.addToken([TokenType]::SEMI); break;}
+      # comments
+      # '-' is different as can start a comment
+      '-' {
+        if ($this.match('-')) { #if we see a second - ignore till end of line
+          while($this.peek() -ne '`n' -and (-not $this.isAtEnd)) {$this.advance()}
+        } else {
+          $this.addToken([TokenType]::MINUS);
+        }
+        break;
       }
-      '.' {
-        $this.addToken([TokenType]::DOT); break;
+      # code/algo for handling /* */ comments adapted from Chelsea Troy's Lox implemetation
+      #(https://github.com/chelseatroy/craftinginterpreters/blob/block-comment-solution/java/com/craftinginterpreters/lox/Scanner.java)
+      # I don't think this handles nested comments.  Also would be difficult to capture comment text
+      '/' {
+        if ($this.match('*')) { #then we are in a comment, skip characters till we see potentil end comment
+          while ($this.peek() -ne '*' -and (-not $this.isAtEnd())) { $this.advance();}
+        } else {
+        $this.addToken([TokenType]::SLASH);
+        }
+        break;
       }
+      # asterisk denotes multiplication, but also ends block comments
       '*' {
-        $this.addToken([TokenType]::STAR); break;
+        if ($this.match('/')) { # finish advancing past comment - though I don't get why a while!?!?!
+          while ($this.peek() -ne '`n' -and ( -not $this.isAtEnd())) { $this.advance() };
+        } else {
+          $this.addToken([TokenType]::STAR);
+        }
+        break;
       }
-      '(' {
-        $this.addToken([TokenType]::LPAREN); break;
+      # double character tokens
+      '!' {
+        if($this.match('=')) {
+          $this.addToken([TokenType]::BANG_EQUAL)
+        } else {
+          $this.addToken([TokenType]::BANG)
+        }
+        break;
       }
-      ')' {
-        $this.addToken([TokenType]::RPAREN); break;
+      '=' {
+        if($this.match('=')) {
+          $this.addToken([TokenType]::EQUAL_EQUAL)
+        } else {
+          $this.addToken([TokenType]::EQUAL)
+        }
+        break;
       }
-      ';' {
-        $this.addToken([TokenType]::SEMI); break;
+      '>' {
+        if($this.match('=')) {
+          $this.addToken([TokenType]::LESS_EQUAL)
+        } else {
+          $this.addToken([TokenType]::LESS)
+        }
+        break;
+      }
+      '<' {
+        if($this.match('=')) {
+          $this.addToken([TokenType]::GREATER_EQUAL)
+        } else {
+          $this.addToken([TokenType]::GREATER)
+        }
+        break;
       }
       # whitespace - do nothing with it
       ' '   { break; }

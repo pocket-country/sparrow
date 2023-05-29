@@ -1,7 +1,7 @@
 # this file contains:
 # - Class definitin for Token objects
 # - Enum for TokenType
-# - dictionary for reserved words
+# - Dictionary for reserved words (tbd)
 
 enum TokenType {
     
@@ -17,6 +17,20 @@ enum TokenType {
     WITH; UNION; PARTITION; OVER; AS; 
 
     EOF
+}
+# for IDing identifiers that are reserved words
+$keywords = @{
+    "select" = [TokenType::SELECT];
+    "into" = [TokenType::INTO];
+    "from" = [TokenType::FROM];
+    "where" = [TokenType]::WHERE;
+    "group_by" = [TokenType]::GROUP_BY;
+    "order by" = [TokenType]::ORDER_BY;
+    "with" = [TokenType]::WITH;
+    "union" = [TokenType]::UNION;
+    "partition" = [TokenType]::PARTITION;
+    "over" = [TokenType]::OVER;
+    "as" = [TokenType]::AS;
 }
 class Token {
     [TokenType] $type;
