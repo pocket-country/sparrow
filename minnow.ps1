@@ -19,13 +19,13 @@
 # class - in the Pascal sense, a data record, to hold an 'extended character - our IR that holds position info as well as character
 class EC {
     [char] $byte;
-    [int] $atline;
-    [int] $atoffset;
+    [int] $line;
+    [int] $ofst;
     #constructor
     EC([char] $c, [int] $l, [int] $o) {
         $this.byte = $c;
-        $this.atline = $l;
-        $this.atoffset = $o;
+        $this.line = $l;
+        $this.ofst = $o;
     }
 }
 # holds internal representation we are building, an array of extended character objects.
@@ -121,14 +121,16 @@ $sqlIn = [InputBuffer]::new($ScrFileName);
 $state = "beg";     # everyone just numbers these, but then ... which is which?
                     # I'm gonna use a 3 chr mnemonic
 $iter = 0; # for setting up a 'safety' during debugging
+$limit = 100; #max iterations
+if ($limit -gt 0) {Write-Host "Minnow in a fishbowl: $limit"}
 
 # first pass write everything out for clarity.  Then refactor into functions for efficiency.
-Write-Host Start processing
+Write-Host Processing
 
 # the state machine loop:
 while (-not $sqlIn.IsAtEnd()) {
     $iter++
-    if ($iter -gt 100) {Write-Host "Hit The Wall!"; Break;} 
+    if ($iter -gt $limit) {Write-Host "Hit The Wall!"; Break;} 
     else {if ($doggit) {Write-Host "Iteration ($iter)"}}
 
     Switch ($state) {
@@ -220,10 +222,34 @@ while (-not $sqlIn.IsAtEnd()) {
     } # end state switch
 } # end main while loop
 
-#if state = final then OK else error
+# if state = final then OK else error
+# am currently not dealing with this as basically any text is a legal string
+# we are just pulling out chunks of it.
 
 #any post processing
-Write-Host "post processng"
-$eChars;
-ConvertTo-Json -EnumsAsStrings -depth 10 -InputObject ($eChars) | Out-File "./test.json"
+Write-Host "Generating Output"
+
+# TODO need to set up flags or something to control input and output file names and set these output booleans
+
+$console = $false;
+if ($console) { #dump value to default output
+    $eChars;
+}
+$json = $true;
+if ($json) { # write  in json format.  Warning, this the file probably by a factor of 10
+    $outfile = "./minnow.json"
+    ConvertTo-Json -EnumsAsStrings -depth 3 -InputObject ($eChars) | Out-File "./minnow.json"
+}
+
+$minify = $true;
+if ($minify) { #output as minified text.  This looses origional position info but preserves SQL (with \s* -> ' ' and comments removed)
+    $outfile = "./minnow.min";
+    $stringBuilder = [System.Text.StringBuilder]::new()
+    foreach ( $ec in $eChars) { 
+        #$ec.byte;
+        [void] $stringBuilder.Append($ec.byte) 
+    }
+    $null = new-item $outfile -force ;
+    add-content $outfile $stringBuilder.ToString() 
+}
 # ### #
